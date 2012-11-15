@@ -41,9 +41,9 @@
      gg       is the block's color
 
    The block color has this meaning:
-   gg=00=White: block is dead (after mark, before sweep)
+   gg=00=White: block is dead, not reachable from the stack (after mark, before sweep)
    gg=01=Grey:  block is live, children not marked (during mark)
-   gg=11=Black: block is live (after mark, before sweep)
+   gg=11=Black: block is live, reachable from the stack (after mark, before sweep)
    gg=11=Blue:  block is on the freelist or orphaned
 
    A block of length zero is an orphan; it cannot be used
@@ -451,16 +451,82 @@ void initheap()
     freelist = &heap[0];
 }
 
+// Recursively mark everything reachable from the block
+void mark(word* block)
+{   
+    // Check whether the color is white
+    if (Color(block[0]) == White)
+    {
+        // Paint black
+        block[0] = Paint(block[0], Black);
+    }
+    
+    // TODO: Maybe we have to check all words in the block and not expect a cons-cell
+
+    // Mark recursively on first element in the cons-cell
+    if(!IsInt(block[1]) && block[1] != 0) 
+    {
+        mark((word *) block[1]);
+    }
+        
+    // Mark recursively on second element in the cons-cell
+    if(!IsInt(block[2]) && block[2] != 0)
+    {
+        mark((word *) block[2]);
+    }       
+}
+
 void markPhase(int s[], int sp)
 {
     printf("marking ...\n");
-    // TODO: Actually mark something
+    int i;
+
+    for (i = 0; i < sp + 1; i++)
+    {
+        // Checks if the element on the stack is a reference
+        if(!IsInt(s[i]) && s[i] != 0)
+        {
+            mark((word *) s[i]);
+        }
+    }
 }
 
 void sweepPhase()
 {
     printf("sweeping ...\n");
-    // TODO: Actually sweep
+    
+    int i = 0;
+
+    word *prev = freelist;
+
+    while(i < HEAPSIZE)
+    {
+        word *element_in_heap = (word *) &heap[i];
+
+        // If white, paint blue and add to freelist
+        if(Color(element_in_heap[0]) == White)
+        {
+            // Paint white block blue
+            element_in_heap[0] = Paint(element_in_heap[0], Blue);
+            
+            // Exercise 2
+            // Add blue block to freelist
+            element_in_heap[1] = (word) prev;
+            freelist = (word *) &element_in_heap[0];
+
+            // Exercise 3
+            // Join adjacent dead blocks into a single dead block
+                           
+
+        } 
+        // If black, paint white
+        else if(Color(element_in_heap[0]) == Black)
+        {
+            element_in_heap[0] = Paint(element_in_heap[0], White);
+        }
+        
+        i += Length(element_in_heap[0]) + 1;
+    }
 }
 
 void collect(int s[], int sp)
