@@ -316,43 +316,43 @@ int execcode(int p[], int s[], int iargs[], int iargc, int /* boolean */ trace)
             s[sp + 1] = 0; sp++; break;
         case CONS:
         {
-            word *p = allocate(CONSTAG, 2, s, sp);
-            p[1] = (word)s[sp - 1];
-            p[2] = (word)s[sp];
-            s[sp - 1] = (int)p;
+            word *w = allocate(CONSTAG, 2, s, sp);
+            w[1] = (word)s[sp - 1];
+            w[2] = (word)s[sp];
+            s[sp - 1] = (int)w;
             sp--;
         } break;
         case CAR:
         {
-            word *p = (word *)s[sp];
-            if (p == 0)
+            word *w = (word *)s[sp];
+            if (w == 0)
             {
                 printf("Cannot take car of null\n");
                 return -1;
             }
-            s[sp] = (int)(p[1]);
+            s[sp] = (int)(w[1]);
         } break;
         case CDR:
         {
-            word *p = (word *)s[sp];
-            if (p == 0)
+            word *w = (word *)s[sp];
+            if (w == 0)
             {
                 printf("Cannot take cdr of null\n");
                 return -1;
             }
-            s[sp] = (int)(p[2]);
+            s[sp] = (int)(w[2]);
         } break;
         case SETCAR:
         {
             word v = (word)s[sp--];
-            word *p = (word *)s[sp];
-            p[1] = v;
+            word *w = (word *)s[sp];
+            w[1] = v;
         } break;
         case SETCDR:
         {
             word v = (word)s[sp--];
-            word *p = (word *)s[sp];
-            p[2] = v;
+            word *w = (word *)s[sp];
+            w[2] = v;
         } break;
         default:
             printf("Illegal instruction %d at address %d\n", p[pc - 1], pc - 1);
