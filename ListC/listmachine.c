@@ -43,7 +43,7 @@
    The block color has this meaning:
    gg=00=White: block is dead, not reachable from the stack (after mark, before sweep)
    gg=01=Grey:  block is live, children not marked (during mark)
-   gg=11=Black: block is live, reachable from the stack (after mark, before sweep)
+   gg=10=Black: block is live, reachable from the stack (after mark, before sweep)
    gg=11=Blue:  block is on the freelist or orphaned
 
    A block of length zero is an orphan; it cannot be used
@@ -80,7 +80,6 @@ typedef unsigned int word;
 #define CONSTAG 0
 
 // Heap size in words
-
 #define HEAPSIZE 1000
 
 word *heap;
@@ -387,7 +386,7 @@ int execute(int argc, char **argv, int /* boolean */ trace)
 
 word mkheader(unsigned int tag, unsigned int length, unsigned int color)
 {
-    return (tag << 24) | (length << 2) | color;
+    return (tag << 24) | (length << 2) | (color << 0);
 }
 
 int inHeap(word *p)
@@ -473,7 +472,7 @@ void mark(word* block)
     if(!IsInt(block[2]) && block[2] != 0)
     {
         mark((word *) block[2]);
-    }       
+    }
 }
 
 void markPhase(int s[], int sp)
@@ -484,6 +483,7 @@ void markPhase(int s[], int sp)
     for (i = 0; i < sp + 1; i++)
     {
         // Checks if the element on the stack is a reference
+        // TODO: Make a seperate function (see mark())
         if(!IsInt(s[i]) && s[i] != 0)
         {
             mark((word *) s[i]);
