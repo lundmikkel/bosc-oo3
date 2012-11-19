@@ -508,15 +508,22 @@ void sweepPhase()
         {
             // Paint white block blue
             element_in_heap[0] = Paint(element_in_heap[0], Blue);
+
+            // Exercise 3
+            // Join adjacent dead blocks into a single dead block
+            word *next_free_block = &heap[i + Length(element_in_heap[0]) + 1];
+            if (next_free_block == White)
+            {
+                element_in_heap[0] = mkheader(0, Length(element_in_heap[0]) + Length(next_free_block[0]), Blue);
+            }
+
+            // Exercise 4
             
+
             // Exercise 2
             // Add blue block to freelist
             element_in_heap[1] = (word) prev;
             freelist = (word *) &element_in_heap[0];
-
-            // Exercise 3
-            // Join adjacent dead blocks into a single dead block
-                           
 
         } 
         // If black, paint white
