@@ -74,7 +74,7 @@ typedef unsigned int word;
 #define Length(hdr)         (((hdr)>>2)&0x003FFFFF)
 // Logical and with 3 (11) to get the first two bits
 #define Color(hdr)          ((hdr)&3)
-// Logical and of negative 3 (00) to remove color and the use logical or to set the color
+// Logical and of the negation of 3 (00) to remove color and the use logical or to set the color
 #define Paint(hdr, color)   (((hdr)&(~3))|(color))
 
 #define CONSTAG 0
