@@ -451,6 +451,7 @@ void initheap()
     freelist = &heap[0];
 }
 
+
 // Recursively mark everything reachable from the block
 void mark(word* block)
 {   
@@ -478,7 +479,7 @@ void mark(word* block)
 
 void markPhase(int s[], int sp)
 {
-    printf("marking ...\n");
+    //printf("marking ...\n");
     int i;
 
     for (i = 0; i < sp + 1; i++)
@@ -493,7 +494,7 @@ void markPhase(int s[], int sp)
 
 void sweepPhase()
 {
-    printf("sweeping ...\n");
+    //printf("sweeping ...\n");
     
     int i = 0;
 
@@ -509,16 +510,14 @@ void sweepPhase()
             // Paint white block blue
             element_in_heap[0] = Paint(element_in_heap[0], Blue);
 
-            // Exercise 3
-            // Join adjacent dead blocks into a single dead block
+            // Exercise 3 - Join with the adjacent dead block if it's white into a single dead block
             word *next_free_block = &heap[i + Length(element_in_heap[0]) + 1];
-            if (next_free_block == White)
+            word *next_next_free_block = (word *) next_free_block[1];
+            if (Color(next_free_block[0]) == White)
             {
                 element_in_heap[0] = mkheader(0, Length(element_in_heap[0]) + Length(next_free_block[0]), Blue);
+                element_in_heap[1] = next_next_free_block[0];
             }
-
-            // Exercise 4
-            
 
             // Exercise 2
             // Add blue block to freelist
@@ -536,12 +535,13 @@ void sweepPhase()
     }
 }
 
+
 void collect(int s[], int sp)
 {
     markPhase(s, sp);
-    heapStatistics();
+    // heapStatistics();
     sweepPhase();
-    heapStatistics();
+    // heapStatistics();
 }
 
 word *allocate(unsigned int tag, unsigned int length, int s[], int sp)
