@@ -43,7 +43,7 @@
    The block color has this meaning:
    gg=00=White: block is dead, not reachable from the stack (after mark, before sweep)
    gg=01=Grey:  block is live, children not marked (during mark)
-   gg=11=Black: block is live, reachable from the stack (after mark, before sweep)
+   gg=10=Black: block is live, reachable from the stack (after mark, before sweep)
    gg=11=Blue:  block is on the freelist or orphaned
 
    A block of length zero is an orphan; it cannot be used
@@ -74,13 +74,12 @@ typedef unsigned int word;
 #define Length(hdr)         (((hdr)>>2)&0x003FFFFF)
 // Logical and with 3 (11) to get the first two bits
 #define Color(hdr)          ((hdr)&3)
-// Logical and of negative 3 (00) to remove color and the use logical or to set the color
+// Logical and of the negation of 3 (00) to remove color and the use logical or to set the color
 #define Paint(hdr, color)   (((hdr)&(~3))|(color))
 
 #define CONSTAG 0
 
 // Heap size in words
-
 #define HEAPSIZE 1000
 
 word *heap;
@@ -316,43 +315,43 @@ int execcode(int p[], int s[], int iargs[], int iargc, int /* boolean */ trace)
             s[sp + 1] = 0; sp++; break;
         case CONS:
         {
-            word *p = allocate(CONSTAG, 2, s, sp);
-            p[1] = (word)s[sp - 1];
-            p[2] = (word)s[sp];
-            s[sp - 1] = (int)p;
+            word *w = allocate(CONSTAG, 2, s, sp);
+            w[1] = (word)s[sp - 1];
+            w[2] = (word)s[sp];
+            s[sp - 1] = (int)w;
             sp--;
         } break;
         case CAR:
         {
-            word *p = (word *)s[sp];
-            if (p == 0)
+            word *w = (word *)s[sp];
+            if (w == 0)
             {
                 printf("Cannot take car of null\n");
                 return -1;
             }
-            s[sp] = (int)(p[1]);
+            s[sp] = (int)(w[1]);
         } break;
         case CDR:
         {
-            word *p = (word *)s[sp];
-            if (p == 0)
+            word *w = (word *)s[sp];
+            if (w == 0)
             {
                 printf("Cannot take cdr of null\n");
                 return -1;
             }
-            s[sp] = (int)(p[2]);
+            s[sp] = (int)(w[2]);
         } break;
         case SETCAR:
         {
             word v = (word)s[sp--];
-            word *p = (word *)s[sp];
-            p[1] = v;
+            word *w = (word *)s[sp];
+            w[1] = v;
         } break;
         case SETCDR:
         {
             word v = (word)s[sp--];
-            word *p = (word *)s[sp];
-            p[2] = v;
+            word *w = (word *)s[sp];
+            w[2] = v;
         } break;
         default:
             printf("Illegal instruction %d at address %d\n", p[pc - 1], pc - 1);
@@ -387,7 +386,7 @@ int execute(int argc, char **argv, int /* boolean */ trace)
 
 word mkheader(unsigned int tag, unsigned int length, unsigned int color)
 {
-    return (tag << 24) | (length << 2) | color;
+    return (tag << 24) | (length << 2) | (color << 0);
 }
 
 int inHeap(word *p)
@@ -474,7 +473,7 @@ void mark(word* block)
     if(!IsInt(block[2]) && block[2] != 0)
     {
         mark((word *) block[2]);
-    }       
+    }
 }
 
 void markPhase(int s[], int sp)
@@ -485,6 +484,7 @@ void markPhase(int s[], int sp)
     for (i = 0; i < sp + 1; i++)
     {
         // Checks if the element on the stack is a reference
+        // TODO: Make a seperate function (see mark())
         if(!IsInt(s[i]) && s[i] != 0)
         {
             mark((word *) s[i]);
