@@ -87,6 +87,12 @@ word *heap;
 word *afterHeap;
 word *freelist;
 
+// 10.6
+word *heapFrom;
+word *heapTo;
+word *afterFrom;
+word *afterTo;
+
 // These numeric instruction codes must agree with ListC/Machine.fs:
 // (Use #define because const int does not define a constant in C)
 
@@ -441,78 +447,143 @@ void heapStatistics()
            blocks, blocksSize, free, freeSize, largestFree, orphans);
 }
 
+// 10.6
 void initheap()
 {
-    heap = (word *)malloc(sizeof(word) * HEAPSIZE);
-    afterHeap = &heap[HEAPSIZE];
-    // Initially, entire heap is one block on the freelist:
-    heap[0] = mkheader(0, HEAPSIZE - 1, Blue);
-    heap[1] = (word)0;
-    freelist = &heap[0];
+    // OLD CODE
+    // heap = (word *)malloc(sizeof(word) * HEAPSIZE);
+    // afterHeap = &heap[HEAPSIZE];
+    // // Initially, entire heap is one block on the freelist:
+    // heap[0] = mkheader(0, HEAPSIZE - 1, Blue);
+    // heap[1] = (word)0;
+    // freelist = &heap[0];
+
+    heapFrom = (word *)malloc(sizeof(word) * HEAPSIZE);
+    afterFrom = &heapFrom[HEAPSIZE];
+
+    heapTo = (word *)malloc(sizeof(word) * HEAPSIZE);
+    afterTo = &heapTo[HEAPSIZE];
+
+    freelist = &heapFrom[0];
 }
 
-
-// Recursively mark everything reachable from the block
-void mark(word* block)
-{   
-         
-}
-
-void markPhase(int s[], int sp)
+// 10.6
+int inToHeap(word *header)
 {
+    int i = 0;
     
+    while (i < HEAPSIZE)
+    {
+        word *w = (word *) &heapTo[i];
+
+        if (*header == w[0])
+            return 1; // header is in heapTo
+
+        i += Length(w[0]) + 1;
+    }
+    return 0; // header is not in heapTo
 }
 
-void sweepPhase()
+// 10.6
+word *copy(word *block)
 {
-    //printf("sweeping ...\n");
+    if (block[1] != 0 && !IsInt(block[1]) && inToHeap(&block[1]))
+    {
+        // block already coppied
+        return &block[1]; 
+    } else {
+        // block not yet coppied
+        word *oldB = block;
+        // (freelist should point to to-list at this point)
+        word *newB = freelist;
+        // update freelist
+        freelist += Length(block[0]) + 1;
+
+        // copy all words in block
+        int i;
+        for(i = 0; i <= Length(block[0]) + 1; i++) {
+            newB[i] = oldB[i];
+        }
+
+        // OLD CODE
+        // *newB[0] = *oldB[0];
+        // *newB[1] = *oldB[1];
+        // *newB[2] = *oldB[2];
+
+        // recursive calls
+        if (oldB[1] != 0 && !IsInt(oldB[1]))
+            newB[1] = *copy(&oldB[1]);
+        if (oldB[2] != 0 && !IsInt(oldB[2]))
+            newB[2] = *copy(&oldB[2]);
+
+        // first word in oldB is set to address of newB
+        oldB[1] = (word)newB;
+
+        // return address of newB
+        return newB;
+    }
 }
 
+// 10.6
+void copyFromTo(int *s, int sp)
+{
+    // let freelist point to the beginning of to-space
+    freelist = &heapTo[0];
 
+    // run through stack and copy live blocks from from-space to to-space
+    int i;
+    for (i = 0; i <= sp; i++)
+    {
+        // Checks if the element on the stack is a reference
+        if(s[i] != 0 && !IsInt(s[i]))
+        {
+            // copy and update reference
+            s[i] = (word)copy((word *) s[i]);
+        }
+    }
+
+    // swap heap  pointers
+    word *tmp = heapFrom;
+    heapFrom = heapTo;
+    heapTo = tmp;
+
+    tmp = afterFrom;
+    afterFrom = afterTo;
+    afterTo= afterFrom;
+}
+
+// 10.6
 void collect(int s[], int sp)
 {
-    markPhase(s, sp);
+    printf("\ncollect!\n");
+
+    // OLD CODE
+    // markPhase(s, sp);
     // heapStatistics();
-    sweepPhase();
+    // sweepPhase();
     // heapStatistics();
+
+    copyFromTo(s, sp);
 }
 
+// 10.6
 word *allocate(unsigned int tag, unsigned int length, int s[], int sp)
 {
     int attempt = 1;
     do
     {
-        word *free = freelist;
-        word **prev = &freelist;
-        while (free != 0)
+        word *newBlock = freelist;
+        freelist += length + 1;
+        // hvis der er plads sættes blokken ind i 'from'
+        if (freelist <= afterFrom)
         {
-            int rest = Length(free[0]) - length;
-            if (rest >= 0)
-            {
-                if (rest == 0) // Exact fit with free block
-                    *prev = (word *)free[1];
-                else if (rest == 1)   // Create orphan (unusable) block
-                {
-                    *prev = (word *)free[1];
-                    free[length + 1] = mkheader(0, rest - 1, Blue);
-                }
-                else     // Make previous free block point to rest of this block
-                {
-                    *prev = &free[length + 1];
-                    free[length + 1] = mkheader(0, rest - 1, Blue);
-                    free[length + 2] = free[1];
-                }
-                free[0] = mkheader(tag, length, White);
-                return free;
-            }
-            prev = (word **)&free[1];
-            free = (word *)free[1];
+            newBlock[0] = mkheader(tag, length, White);
+            return newBlock;
         }
         // No free space, do a garbage collection and try again
         if (attempt == 1)
             collect(s, sp);
-    }
-    while (attempt++ == 1);
+    } while (attempt++ == 1);
     printf("Out of memory\n");
     exit(1);
 }
