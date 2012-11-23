@@ -462,13 +462,12 @@ void mark(word* block)
     }
     
     // TODO: Maybe we have to check all words in the block and not expect a cons-cell
-
     // Mark recursively on first element in the cons-cell
     if(!IsInt(block[1]) && block[1] != 0) 
     {
         mark((word *) block[1]);
     }
-        
+     
     // Mark recursively on second element in the cons-cell
     if(!IsInt(block[2]) && block[2] != 0)
     {
@@ -478,10 +477,10 @@ void mark(word* block)
 
 void markPhase(int s[], int sp)
 {
-    //printf("marking ...\n");
+    printf("marking ...\n");
     int i;
 
-    for (i = 0; i < sp + 1; i++)
+    for (i = 0; i < sp; ++i)
     {
         // Checks if the element on the stack is a reference
         // TODO: Make a seperate function (see mark())
@@ -494,7 +493,7 @@ void markPhase(int s[], int sp)
 
 void sweepPhase()
 {
-    //printf("sweeping ...\n");
+    printf("sweeping ...\n");
     
     int i = 0;
 
@@ -507,22 +506,27 @@ void sweepPhase()
         // If white, paint blue and add to freelist
         if(Color(element_in_heap[0]) == White)
         {
+            printf("Element is dead!\n");
             // Paint white block blue
             element_in_heap[0] = Paint(element_in_heap[0], Blue);
 
             // Exercise 3 - Join with the adjacent dead block if it's white into a single dead block
-            word *next_free_block = &heap[i + Length(element_in_heap[0]) + 1];
-            word *next_next_free_block = (word *) next_free_block[1];
-            if (Color(next_free_block[0]) == White)
+            if(i + Length(element_in_heap[0]) + 1 < HEAPSIZE)
             {
-                element_in_heap[0] = mkheader(0, Length(element_in_heap[0]) + Length(next_free_block[0]), Blue);
-                element_in_heap[1] = next_next_free_block[0];
-            }
+                // Next free block
+                word *next_free_block = &heap[i + Length(element_in_heap[0]) + 1];
+                    
+                if (Color(next_free_block[0]) == White && !IsInt(next_free_block[1]) && next_free_block[1] != 0)
+                {
+                    element_in_heap[0] = mkheader(0, Length(element_in_heap[0]) + Length(next_free_block[0]), Blue);
+                    element_in_heap[1] = next_free_block[1];
+                }
 
-            // Exercise 2
-            // Add blue block to freelist
-            element_in_heap[1] = (word) prev;
-            freelist = (word *) &element_in_heap[0];
+                // Exercise 2
+                // Add blue block to freelist
+                element_in_heap[1] = (word) prev;
+                freelist = (word *) &element_in_heap[0];   
+            }
 
         } 
         // If black, paint white
