@@ -59,23 +59,28 @@
 
 typedef unsigned int word;
 
-#define IsInt(v)  (((v)&1)==1)
-#define Tag(v)    (((v)<<1)|1)
-#define Untag(v)  ((v)>>1)
+#define IsInt(v)			(((v)  & 1) == 1)
+#define Tag(v)  			(((v) << 1) | 1)
+#define Untag(v)			( (v) >> 1)
 
-#define White 0
-#define Grey  1
-#define Black 2
-#define Blue  3
+#define isReference(w)		!IsInt(w) && w != 0
 
-// Shift 24 bits to get tttttttt
-#define BlockTag(hdr)       ((hdr)>>24)
-// Shift 2 bits to remove garbage and use logical and to get the 22 next bits (all the n's)
-#define Length(hdr)         (((hdr)>>2)&0x003FFFFF)
-// Logical and with 3 (11) to get the first two bits
-#define Color(hdr)          ((hdr)&3)
-// Logical and of negative 3 (00) to remove color and the use logical or to set the color
-#define Paint(hdr, color)   (((hdr)&(~3))|(color))
+#define White 0				// block is dead, not reachable from the stack (after mark, before sweep)
+#define Grey  1				// block is live, children not marked (during mark)
+#define Black 2				// block is live, reachable from the stack (after mark, before sweep)
+#define Blue  3				// block is on the freelist or orphaned
+
+#define isWhite(hdr)		Color(hdr) == White
+#define isGrey(hdr) 		Color(hdr) == Grey
+#define isBlack(hdr)		Color(hdr) == Black
+#define isBlue(hdr) 		Color(hdr) == Blue
+
+#define BlockTag(hdr)		((hdr)>>24)						// Shift 24 bits to get tttttttt
+#define Length(hdr)			(((hdr)>>2)&0x003FFFFF)			// Shift 2 bits to remove garbage and use logical and to get the 22 next bits (all the n's)
+#define Color(hdr)			((hdr)&3)						// Logical and with 3 (11) to get the first two bits
+#define Paint(hdr, color)   hdr = (((hdr)&(~3))|(color))	// Logical and of negative 3 (00) to remove color and the use logical or to set the color
+
+#define isOrphan(w)		Length(w) <= 0
 
 #define CONSTAG 0
 
@@ -83,9 +88,9 @@ typedef unsigned int word;
 
 #define HEAPSIZE 1000
 
-word *heap;
-word *afterHeap;
-word *freelist;
+word* heap;
+word* afterHeap;
+word* freelist;
 
 // These numeric instruction codes must agree with ListC/Machine.fs:
 // (Use #define because const int does not define a constant in C)
@@ -184,17 +189,17 @@ void printStackAndPc(int s[], int bp, int sp, int p[], int pc)
 
 // Read instructions from a file, return array of instructions
 
-int *readfile(char *filename)
+int* readfile(char* filename)
 {
     int capacity = 1, size = 0;
-    int *program = (int *)malloc(sizeof(int) * capacity);
-    FILE *inp = fopen(filename, "r");
+    int* program = (int*)malloc(sizeof(int) * capacity);
+    FILE* inp = fopen(filename, "r");
     int instr;
     while (fscanf(inp, "%d", &instr) == 1)
     {
         if (size >= capacity)
         {
-            int *buffer = (int *)malloc(sizeof(int) * 2 * capacity);
+            int* buffer = (int*)malloc(sizeof(int) * 2 * capacity);
             int i;
             for (i = 0; i < capacity; i++)
                 buffer[i] = program[i];
@@ -208,7 +213,7 @@ int *readfile(char *filename)
     return program;
 }
 
-word *allocate(unsigned int tag, unsigned int length, int s[], int sp);
+word* allocate(unsigned int tag, unsigned int length, int s[], int sp);
 
 // The machine: execute the code starting at p[pc]
 
@@ -219,156 +224,158 @@ int execcode(int p[], int s[], int iargs[], int iargc, int /* boolean */ trace)
     int pc = 0;           // Program counter: next instruction
     for (;;)
     {
-        if (trace)
+        if (trace) {
             printStackAndPc(s, bp, sp, p, pc);
+        }
+
         switch (p[pc++])
         {
-        case CSTI:
-            s[sp + 1] = Tag(p[pc++]); sp++; break;
-        case ADD:
-            s[sp - 1] = Tag(Untag(s[sp - 1]) + Untag(s[sp])); sp--; break;
-        case SUB:
-            s[sp - 1] = Tag(Untag(s[sp - 1]) - Untag(s[sp])); sp--; break;
-        case MUL:
-            s[sp - 1] = Tag(Untag(s[sp - 1]) * Untag(s[sp])); sp--; break;
-        case DIV:
-            s[sp - 1] = Tag(Untag(s[sp - 1]) / Untag(s[sp])); sp--; break;
-        case MOD:
-            s[sp - 1] = Tag(Untag(s[sp - 1]) % Untag(s[sp])); sp--; break;
-        case EQ:
-            s[sp - 1] = Tag(s[sp - 1] == s[sp] ? 1 : 0); sp--; break;
-        case LT:
-            s[sp - 1] = Tag(s[sp - 1] < s[sp] ? 1 : 0); sp--; break;
-        case NOT:
-        {
-            int v = s[sp];
-            s[sp] = Tag((IsInt(v) ? Untag(v) == 0 : v == 0) ? 1 : 0);
-        } break;
-        case DUP:
-            s[sp + 1] = s[sp]; sp++; break;
-        case SWAP:
-        {
-            int tmp = s[sp];
-            s[sp] = s[sp - 1];
-            s[sp - 1] = tmp;
-        } break;
-        case LDI:                 // load indirect
-            s[sp] = s[Untag(s[sp])]; break;
-        case STI:                 // store indirect, keep value on top
-            s[Untag(s[sp - 1])] = s[sp]; s[sp - 1] = s[sp]; sp--; break;
-        case GETBP:
-            s[sp + 1] = Tag(bp); sp++; break;
-        case GETSP:
-            s[sp + 1] = Tag(sp); sp++; break;
-        case INCSP:
-            sp = sp + p[pc++]; break;
-        case GOTO:
-            pc = p[pc]; break;
-        case IFZERO:
-        {
-            int v = s[sp--];
-            pc = (IsInt(v) ? Untag(v) == 0 : v == 0) ? p[pc] : pc + 1;
-        } break;
-        case IFNZRO:
-        {
-            int v = s[sp--];
-            pc = (IsInt(v) ? Untag(v) != 0 : v != 0) ? p[pc] : pc + 1;
-        } break;
-        case CALL:
-        {
-            int argc = p[pc++];
-            int i;
-            for (i = 0; i < argc; i++)           // Make room for return address
-                s[sp - i + 2] = s[sp - i];         // and old base pointer
-            s[sp - argc + 1] = Tag(pc + 1); sp++;
-            s[sp - argc + 1] = Tag(bp);   sp++;
-            bp = sp + 1 - argc;
-            pc = p[pc];
-        } break;
-        case TCALL:
-        {
-            int argc = p[pc++];                  // Number of new arguments
-            int pop  = p[pc++];                  // Number of variables to discard
-            int i;
-            for (i = argc - 1; i >= 0; i--) // Discard variables
-                s[sp - i - pop] = s[sp - i];
-            sp = sp - pop; pc = p[pc];
-        } break;
-        case RET:
-        {
-            int res = s[sp];
-            sp = sp - p[pc]; bp = Untag(s[--sp]); pc = Untag(s[--sp]);
-            s[sp] = res;
-        } break;
-        case PRINTI:
-            printf("%d ", IsInt(s[sp]) ? Untag(s[sp]) : s[sp]); break;
-        case PRINTC:
-            printf("%c", Untag(s[sp])); break;
-        case LDARGS:
-        {
-            int i;
-            for (i = 0; i < iargc; i++) // Push commandline arguments
-                s[++sp] = Tag(iargs[i]);
-        } break;
-        case STOP:
-            return 0;
-        case NIL:
-            s[sp + 1] = 0; sp++; break;
-        case CONS:
-        {
-            word *w = allocate(CONSTAG, 2, s, sp);
-            w[1] = (word)s[sp - 1];
-            w[2] = (word)s[sp];
-            s[sp - 1] = (int)w;
-            sp--;
-        } break;
-        case CAR:
-        {
-            word *w = (word *)s[sp];
-            if (w == 0)
-            {
-                printf("Cannot take car of null\n");
-                return -1;
-            }
-            s[sp] = (int)(w[1]);
-        } break;
-        case CDR:
-        {
-            word *w = (word *)s[sp];
-            if (w == 0)
-            {
-                printf("Cannot take cdr of null\n");
-                return -1;
-            }
-            s[sp] = (int)(w[2]);
-        } break;
-        case SETCAR:
-        {
-            word v = (word)s[sp--];
-            word *w = (word *)s[sp];
-            w[1] = v;
-        } break;
-        case SETCDR:
-        {
-            word v = (word)s[sp--];
-            word *w = (word *)s[sp];
-            w[2] = v;
-        } break;
-        default:
-            printf("Illegal instruction %d at address %d\n", p[pc - 1], pc - 1);
-            return -1;
+        	case CSTI:
+        	    s[sp + 1] = Tag(p[pc++]); sp++; break;
+        	case ADD:
+        	    s[sp - 1] = Tag(Untag(s[sp - 1]) + Untag(s[sp])); sp--; break;
+        	case SUB:
+        	    s[sp - 1] = Tag(Untag(s[sp - 1]) - Untag(s[sp])); sp--; break;
+        	case MUL:
+        	    s[sp - 1] = Tag(Untag(s[sp - 1]) * Untag(s[sp])); sp--; break;
+        	case DIV:
+        	    s[sp - 1] = Tag(Untag(s[sp - 1]) / Untag(s[sp])); sp--; break;
+        	case MOD:
+        	    s[sp - 1] = Tag(Untag(s[sp - 1]) % Untag(s[sp])); sp--; break;
+        	case EQ:
+        	    s[sp - 1] = Tag(s[sp - 1] == s[sp] ? 1 : 0); sp--; break;
+        	case LT:
+        	    s[sp - 1] = Tag(s[sp - 1] < s[sp] ? 1 : 0); sp--; break;
+        	case NOT:
+        	{
+        	    int v = s[sp];
+        	    s[sp] = Tag((IsInt(v) ? Untag(v) == 0 : v == 0) ? 1 : 0);
+        	} break;
+        	case DUP:
+        	    s[sp + 1] = s[sp]; sp++; break;
+        	case SWAP:
+        	{
+        	    int tmp = s[sp];
+        	    s[sp] = s[sp - 1];
+        	    s[sp - 1] = tmp;
+        	} break;
+        	case LDI:                 // load indirect
+        	    s[sp] = s[Untag(s[sp])]; break;
+        	case STI:                 // store indirect, keep value on top
+        	    s[Untag(s[sp - 1])] = s[sp]; s[sp - 1] = s[sp]; sp--; break;
+        	case GETBP:
+        	    s[sp + 1] = Tag(bp); sp++; break;
+        	case GETSP:
+        	    s[sp + 1] = Tag(sp); sp++; break;
+        	case INCSP:
+        	    sp = sp + p[pc++]; break;
+        	case GOTO:
+        	    pc = p[pc]; break;
+        	case IFZERO:
+        	{
+        	    int v = s[sp--];
+        	    pc = (IsInt(v) ? Untag(v) == 0 : v == 0) ? p[pc] : pc + 1;
+        	} break;
+        	case IFNZRO:
+        	{
+        	    int v = s[sp--];
+        	    pc = (IsInt(v) ? Untag(v) != 0 : v != 0) ? p[pc] : pc + 1;
+        	} break;
+        	case CALL:
+        	{
+        	    int argc = p[pc++];
+        	    int i;
+        	    for (i = 0; i < argc; i++)           // Make room for return address
+        	        s[sp - i + 2] = s[sp - i];         // and old base pointer
+        	    s[sp - argc + 1] = Tag(pc + 1); sp++;
+        	    s[sp - argc + 1] = Tag(bp);   sp++;
+        	    bp = sp + 1 - argc;
+        	    pc = p[pc];
+        	} break;
+        	case TCALL:
+        	{
+        	    int argc = p[pc++];                  // Number of new arguments
+        	    int pop  = p[pc++];                  // Number of variables to discard
+        	    int i;
+        	    for (i = argc - 1; i >= 0; i--) // Discard variables
+        	        s[sp - i - pop] = s[sp - i];
+        	    sp = sp - pop; pc = p[pc];
+        	} break;
+        	case RET:
+        	{
+        	    int res = s[sp];
+        	    sp = sp - p[pc]; bp = Untag(s[--sp]); pc = Untag(s[--sp]);
+        	    s[sp] = res;
+        	} break;
+        	case PRINTI:
+        	    printf("%d ", IsInt(s[sp]) ? Untag(s[sp]) : s[sp]); break;
+        	case PRINTC:
+        	    printf("%c", Untag(s[sp])); break;
+        	case LDARGS:
+        	{
+        	    int i;
+        	    for (i = 0; i < iargc; i++) // Push commandline arguments
+        	        s[++sp] = Tag(iargs[i]);
+        	} break;
+        	case STOP:
+        	    return 0;
+        	case NIL:
+        	    s[sp + 1] = 0; sp++; break;
+        	case CONS:
+        	{
+        	    word* w = allocate(CONSTAG, 2, s, sp);
+        	    w[1] = (word)s[sp - 1];
+        	    w[2] = (word)s[sp];
+        	    s[sp - 1] = (int)w;
+        	    sp--;
+        	} break;
+        	case CAR:
+        	{
+        	    word* w = (word*)s[sp];
+        	    if (w == 0)
+        	    {
+        	        printf("Cannot take car of null\n");
+        	        return -1;
+        	    }
+        	    s[sp] = (int)(w[1]);
+        	} break;
+        	case CDR:
+        	{
+        	    word* w = (word*)s[sp];
+        	    if (w == 0)
+        	    {
+        	        printf("Cannot take cdr of null\n");
+        	        return -1;
+        	    }
+        	    s[sp] = (int)(w[2]);
+        	} break;
+        	case SETCAR:
+        	{
+        	    word v = (word) s[sp--];
+        	    word* w = (word*) s[sp];
+        	    w[1] = v;
+        	} break;
+        	case SETCDR:
+        	{
+        	    word v = (word) s[sp--];
+        	    word* w = (word*) s[sp];
+        	    w[2] = v;
+        	} break;
+        	default:
+        	    printf("Illegal instruction %d at address %d\n", p[pc - 1], pc - 1);
+        	    return -1;
         }
     }
 }
 
 // Read program from file, and execute it
 
-int execute(int argc, char **argv, int /* boolean */ trace)
+int execute(int argc, char** argv, int /* boolean */ trace)
 {
-    int *p = readfile(argv[trace ? 2 : 1]);         // program bytecodes: int[]
-    int *s = (int *)malloc(sizeof(int) * STACKSIZE); // stack: int[]
+    int* p = readfile(argv[trace ? 2 : 1]);         // program bytecodes: int[]
+    int* s = (int*)malloc(sizeof(int) * STACKSIZE); // stack: int[]
     int iargc = trace ? argc - 3 : argc - 2;
-    int *iargs = (int *)malloc(sizeof(int) * iargc); // program inputs: int[]
+    int* iargs = (int*)malloc(sizeof(int) * iargc); // program inputs: int[]
     int i;
     for (i = 0; i < iargc; i++)                     // Convert commandline arguments
         iargs[i] = atoi(argv[trace ? i + 3 : i + 2]);
@@ -390,7 +397,7 @@ word mkheader(unsigned int tag, unsigned int length, unsigned int color)
     return (tag << 24) | (length << 2) | (color << 0);
 }
 
-int inHeap(word *p)
+int inHeap(word* p)
 {
     return heap <= p && p < afterHeap;
 }
@@ -399,9 +406,14 @@ int inHeap(word *p)
 
 void heapStatistics()
 {
-    int blocks = 0, free = 0, orphans = 0,
-        blocksSize = 0, freeSize = 0, largestFree = 0;
-    word *heapPtr = heap;
+    int blocks		= 0,
+    	free		= 0,
+    	orphans		= 0,
+        blocksSize	= 0,
+        freeSize	= 0,
+        largestFree = 0;
+    word* heapPtr = heap;
+
     while (heapPtr < afterHeap)
     {
         if (Length(heapPtr[0]) > 0)
@@ -411,7 +423,8 @@ void heapStatistics()
         }
         else
             orphans++;
-        word *nextBlock = heapPtr + Length(heapPtr[0]) + 1;
+
+        word* nextBlock = heapPtr + Length(heapPtr[0]) + 1;
         if (nextBlock > afterHeap)
         {
             printf("HEAP ERROR: block at heap[%d] extends beyond heap\n",
@@ -420,7 +433,7 @@ void heapStatistics()
         }
         heapPtr = nextBlock;
     }
-    word *freePtr = freelist;
+    word* freePtr = freelist;
     while (freePtr != 0)
     {
         free++;
@@ -435,7 +448,7 @@ void heapStatistics()
         largestFree = length > largestFree ? length : largestFree;
         if (Color(freePtr[0]) != Blue)
             printf("Non-blue block at heap[%d] on freelist\n", (int)freePtr);
-        freePtr = (word *)freePtr[1];
+        freePtr = (word*) freePtr[1];
     }
     printf("Heap: %d blocks (%d words); of which %d free (%d words, largest %d words); %d orphans\n",
            blocks, blocksSize, free, freeSize, largestFree, orphans);
@@ -443,7 +456,7 @@ void heapStatistics()
 
 void initheap()
 {
-    heap = (word *)malloc(sizeof(word) * HEAPSIZE);
+    heap = (word*) malloc(sizeof(word) * HEAPSIZE);
     afterHeap = &heap[HEAPSIZE];
     // Initially, entire heap is one block on the freelist:
     heap[0] = mkheader(0, HEAPSIZE - 1, Blue);
@@ -451,43 +464,134 @@ void initheap()
     freelist = &heap[0];
 }
 
+void mark(word* block) {
+	// Find white blocks
+    if (isWhite(block[0]))
+    {
+        // Paint black
+        Paint(block[0], Black);
+    }
+
+    // Get block length once
+    int length = Length(block[0]);
+
+    // Recursively mark all references
+    for (int i = 1; i < length; ++i)
+    {
+    	if (isReference(block[i])) {
+    		mark((word*) block[i]);
+    	}
+    }
+}
+
 void markPhase(int s[], int sp)
 {
-    printf("marking ...\n");
-    // TODO: Actually mark something
+    //printf("marking...\n");
+
+    // Loop through stack
+    for (int i = 0; i <= sp; ++i)
+    {
+    	// Mark all references
+    	if (isReference(s[i])) {
+    		mark((word*) s[i]);
+    	}
+    }
 }
 
 void sweepPhase()
 {
-    printf("sweeping ...\n");
-    // TODO: Actually sweep
+    //printf("sweeping...\n");
+
+    word* block;
+    
+    // Loop through all elements on the heap
+    for (int i = 0; i < HEAPSIZE; i += 1 + Length(block[0]))
+    {
+    	// TODO: Check if BlockTag is 0, else go to next element?
+
+    	// Get element from heap
+    	block = (word*) &heap[i];
+
+    	// Paint black blocks white again
+    	if (isBlack(block[0])) {
+    		Paint(block[0], White);
+    	}
+    	// Put white blocks on the freelist
+    	else if (isWhite(block[0])) {
+    		// Paint blue
+    		Paint(block[0], Blue);
+
+
+    		// Exercise 10.3
+    		if (0) // Set to 0 to skip
+    		{
+    			int offset = Length(block[0]) + 1;
+
+	    		// Is there a next block and is it white?
+    			if (i + offset < HEAPSIZE && isWhite(block[offset])) {
+					int new_length = offset + Length(block[offset]);
+
+    				// Create new header for block
+    				block[0] = mkheader(CONSTAG, new_length, Blue);
+	    		}
+	    	}
+
+	    	// Exercise 10.4
+	    	else if (1) // Set to 0 to skip
+    		{
+    			int tryAgain;
+    			do {
+    				tryAgain = 0;
+	    			int offset = Length(block[0]) + 1;
+
+		    		// Is there a next block and is it white?
+	    			if (i + offset < HEAPSIZE && isWhite(block[offset])) {
+						int new_length = offset + Length(block[offset]);
+
+	    				// Create new header for block
+	    				block[0] = mkheader(CONSTAG, new_length, Blue);
+	    				tryAgain = 1;
+		    		}
+		    	} while (tryAgain);
+	    	}
+
+    		// Don't add orphans to freelist as they can't point to the next element
+    		if (!isOrphan(block[0])) {
+    			// Point second element to next free element
+    			block[1] = (word) freelist;
+    			freelist = (word*) &block[0];
+    		}
+    	}
+    }
 }
 
 void collect(int s[], int sp)
 {
+	printf("\nGarbage collecting\n");
+
     markPhase(s, sp);
-    heapStatistics();
+    //heapStatistics();
     sweepPhase();
-    heapStatistics();
+    //heapStatistics();
 }
 
-word *allocate(unsigned int tag, unsigned int length, int s[], int sp)
+word* allocate(unsigned int tag, unsigned int length, int s[], int sp)
 {
     int attempt = 1;
     do
     {
-        word *free = freelist;
-        word **prev = &freelist;
+        word* free = freelist;
+        word** prev = &freelist;
         while (free != 0)
         {
             int rest = Length(free[0]) - length;
             if (rest >= 0)
             {
                 if (rest == 0) // Exact fit with free block
-                    *prev = (word *)free[1];
+                    *prev = (word*) free[1];
                 else if (rest == 1)   // Create orphan (unusable) block
                 {
-                    *prev = (word *)free[1];
+                    *prev = (word*) free[1];
                     free[length + 1] = mkheader(0, rest - 1, Blue);
                 }
                 else     // Make previous free block point to rest of this block
@@ -499,8 +603,8 @@ word *allocate(unsigned int tag, unsigned int length, int s[], int sp)
                 free[0] = mkheader(tag, length, White);
                 return free;
             }
-            prev = (word **)&free[1];
-            free = (word *)free[1];
+            prev = (word**) &free[1];
+            free = (word*) free[1];
         }
         // No free space, do a garbage collection and try again
         if (attempt == 1)
@@ -513,9 +617,9 @@ word *allocate(unsigned int tag, unsigned int length, int s[], int sp)
 
 // Read code from file and execute it
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
-    if (sizeof(word) != 4 || sizeof(word *) != 4 || sizeof(int) != 4)
+    if (sizeof(word) != 4 || sizeof(word*) != 4 || sizeof(int) != 4)
     {
         printf("Size of word, word* or int is not 32 bit, cannot run\n");
         return -1;
