@@ -51,6 +51,15 @@
    created when allocating all but the last word of a free block.
 */
 
+#define Exercise_10_2 2
+#define Exercise_10_3 3
+#define Exercise_10_4 4
+#define Exercise_10_5 5
+
+// Change to constants above to switch between exercises
+int Exercise = Exercise_10_5;
+
+
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -470,37 +479,83 @@ void mark(word* block) {
     {
         // Paint black
         Paint(block[0], Black);
-    }
 
-    // Get block length once
-    int length = Length(block[0]);
+	    // Recursively mark all references
+	    for (int i = 1; i <= Length(block[0]); ++i)
+	    {
+	    	if (isReference(block[i])) {
+	    		mark((word*) block[i]);
+	    	}
+	    }
+    }
+}
+
+
+void markGrey(word* block) {
+    // Paint black
+    Paint(block[0], Black);
 
     // Recursively mark all references
-    for (int i = 1; i < length; ++i)
+    for (int i = 1; i <= Length(block[0]); ++i)
     {
-    	if (isReference(block[i])) {
-    		mark((word*) block[i]);
+    	if (isReference(block[i]) && isWhite(block[i])) {
+		    Paint(block[i], Grey);
     	}
     }
 }
 
 void markPhase(int s[], int sp)
 {
-    //printf("marking...\n");
+	printf("marking ...\n");
 
-    // Loop through stack
-    for (int i = 0; i <= sp; ++i)
-    {
-    	// Mark all references
-    	if (isReference(s[i])) {
-    		mark((word*) s[i]);
-    	}
-    }
+    // Exercise 10.2
+	if (Exercise < Exercise_10_5)
+	{
+	    // Loop through stack
+	    for (int i = 0; i <= sp; ++i)
+	    {
+	    	// Mark all references
+	    	if (isReference(s[i])) {
+	    		mark((word*) s[i]);
+	    	}
+	    }
+	}
+
+	// Exercise 10.5
+	else {
+		// Loop through stack to find heap elements that are directly reacable
+	    for (int i = 0; i <= sp; ++i)
+	    {
+	    	if (isReference(s[i]) && isWhite(s[i]))
+		    {
+		        // Paint grey
+		        Paint(s[i], Grey);
+	    	}
+	    }
+
+	    // Loop through heap repeatedly until no grey cells are found
+	    int foundGrey;
+	    do {
+	    	foundGrey = 0;
+	    	word* block;
+		    for (int i = 0; i < HEAPSIZE; i += 1 + Length(block[0]))
+		    {
+		    	block = (word*) &heap[i];
+
+		    	// Find white blocks
+			    if (isReference(block[0]) && isGrey(block[0]))
+			    {
+			    	markGrey(block);
+			    	foundGrey = 0;
+			    }
+		    }
+		} while (foundGrey);
+	}
 }
 
 void sweepPhase()
 {
-    //printf("sweeping...\n");
+    printf("sweeping...\n");
 
     word* block;
     
@@ -523,7 +578,7 @@ void sweepPhase()
 
 
     		// Exercise 10.3
-    		if (0) // Set to 0 to skip
+    		if (Exercise == Exercise_10_3)
     		{
     			int offset = Length(block[0]) + 1;
 
@@ -537,7 +592,7 @@ void sweepPhase()
 	    	}
 
 	    	// Exercise 10.4
-	    	else if (1) // Set to 0 to skip
+	    	else if (Exercise == Exercise_10_4)
     		{
     			int tryAgain;
     			do {
