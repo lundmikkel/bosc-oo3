@@ -51,13 +51,14 @@
    created when allocating all but the last word of a free block.
 */
 
-#define Exercise_10_2 2
-#define Exercise_10_3 3
-#define Exercise_10_4 4
-#define Exercise_10_5 5
+#define Exercise_10_2   1
+#define Exercise_10_3   2
+#define Exercise_10_4   3
+#define Exercise_10_5   4
+#define Exercise_10_5b  5
 
 // Change to constants above to switch between exercises
-int Exercise = Exercise_10_5;
+int Exercise = Exercise_10_3;
 
 
 #include <stdlib.h>
@@ -72,26 +73,28 @@ typedef unsigned int word;
 #define Tag(v)  			(((v) << 1) | 1)
 #define Untag(v)			( (v) >> 1)
 
-#define isReference(w)		!IsInt(w) && w != 0
+#define IsReference(w)		!IsInt(w) && w != 0
 
 #define White 0				// block is dead, not reachable from the stack (after mark, before sweep)
-#define Grey  1				// block is live, children not marked (during mark)
-#define Black 2				// block is live, reachable from the stack (after mark, before sweep)
-#define Blue  3				// block is on the freelist or orphaned
+#define Grey  1             // block is live, children not marked (during mark)
+#define Black 2             // block is live, reachable from the stack (after mark, before sweep)
+#define Blue  3             // block is on the freelist or orphaned
 
-#define isWhite(hdr)		Color(hdr) == White
-#define isGrey(hdr) 		Color(hdr) == Grey
-#define isBlack(hdr)		Color(hdr) == Black
-#define isBlue(hdr) 		Color(hdr) == Blue
+#define IsWhite(hdr)		Color(hdr) == White
+#define IsGrey(hdr) 		Color(hdr) == Grey
+#define IsBlack(hdr)		Color(hdr) == Black
+#define IsBlue(hdr) 		Color(hdr) == Blue
 
 #define BlockTag(hdr)		((hdr)>>24)						// Shift 24 bits to get tttttttt
 #define Length(hdr)			(((hdr)>>2)&0x003FFFFF)			// Shift 2 bits to remove garbage and use logical and to get the 22 next bits (all the n's)
 #define Color(hdr)			((hdr)&3)						// Logical and with 3 (11) to get the first two bits
 #define Paint(hdr, color)   hdr = (((hdr)&(~3))|(color))	// Logical and of negative 3 (00) to remove color and the use logical or to set the color
 
-#define isOrphan(w)		Length(w) <= 0
+#define IsOrphan(w)		   Length(w) <= 0
 
 #define CONSTAG 0
+
+#define IsCons(w)          BlockTag(w) == CONSTAG 
 
 // Heap size in words
 
@@ -194,6 +197,53 @@ void printStackAndPc(int s[], int bp, int sp, int p[], int pc)
             printf("#%d ", s[i]);
     printf("]");
     printf("{%d:", pc); printInstruction(p, pc); printf("}\n");
+}
+
+char* getColorName(int color) {
+    switch (color) {
+        case White:
+            return "White";
+
+        case Grey:
+            return "Grey";
+
+        case Black:
+            return "Black";
+
+        case Blue:
+            return "Blue";
+    }
+
+    return "Error";
+}
+
+void printHeap() {
+    // Remove to print the heap (for readability, don't use too big heaps)
+    return;
+    
+    word* block;
+    printf("\nFreelist: %d\n", (int) &(freelist[0]));
+
+    for (int i = 0; i < HEAPSIZE; i += 1 + Length(block[0]))
+    {
+        block = (word*) &heap[i];
+
+        printf("%4d. Cons #%d. Length: %d. Color: %s\n", i, (int) &(block[0]), Length(block[0]), getColorName(Color(block[0])));
+
+        for (int j = 1; j <= Length(block[0]); ++j)
+        {
+            if (IsReference(block[j])) {
+                printf("%4d. Reference: %d\n", i + j, block[j]);
+            }
+            else if (block[j] == 0) {
+                printf("%4d. Nil\n", i + j);
+            }
+            else {
+                printf("%4d. Int: %d\n", i + j, Untag(block[j]));
+            }
+        }
+        printf("\n");
+    }
 }
 
 // Read instructions from a file, return array of instructions
@@ -475,7 +525,7 @@ void initheap()
 
 void mark(word* block) {
 	// Find white blocks
-    if (isWhite(block[0]))
+    if (IsWhite(block[0]))
     {
         // Paint black
         Paint(block[0], Black);
@@ -483,30 +533,16 @@ void mark(word* block) {
 	    // Recursively mark all references
 	    for (int i = 1; i <= Length(block[0]); ++i)
 	    {
-	    	if (isReference(block[i])) {
+	    	if (IsReference(block[i])) {
 	    		mark((word*) block[i]);
 	    	}
 	    }
     }
 }
 
-
-void markGrey(word* block) {
-    // Paint black
-    Paint(block[0], Black);
-
-    // Recursively mark all references
-    for (int i = 1; i <= Length(block[0]); ++i)
-    {
-    	if (isReference(block[i]) && isWhite(block[i])) {
-		    Paint(block[i], Grey);
-    	}
-    }
-}
-
 void markPhase(int s[], int sp)
 {
-	printf("marking ...\n");
+	//printf("marking ...\n");
 
     // Exercise 10.2
 	if (Exercise < Exercise_10_5)
@@ -515,7 +551,7 @@ void markPhase(int s[], int sp)
 	    for (int i = 0; i <= sp; ++i)
 	    {
 	    	// Mark all references
-	    	if (isReference(s[i])) {
+	    	if (IsReference(s[i])) {
 	    		mark((word*) s[i]);
 	    	}
 	    }
@@ -523,39 +559,61 @@ void markPhase(int s[], int sp)
 
 	// Exercise 10.5
 	else {
-		// Loop through stack to find heap elements that are directly reacable
-	    for (int i = 0; i <= sp; ++i)
-	    {
-	    	if (isReference(s[i]) && isWhite(s[i]))
-		    {
-		        // Paint grey
-		        Paint(s[i], Grey);
-	    	}
-	    }
+        printHeap();
 
-	    // Loop through heap repeatedly until no grey cells are found
-	    int foundGrey;
-	    do {
-	    	foundGrey = 0;
-	    	word* block;
-		    for (int i = 0; i < HEAPSIZE; i += 1 + Length(block[0]))
-		    {
-		    	block = (word*) &heap[i];
+        // Loop through stack to find heap elements that are directly reacable
+        for (int i = 0; i <= sp; ++i)
+        {
+            if (IsReference(s[i]))
+            {
+                word* block = (word*) s[i];
 
-		    	// Find white blocks
-			    if (isReference(block[0]) && isGrey(block[0]))
-			    {
-			    	markGrey(block);
-			    	foundGrey = 0;
+                if (IsWhite(block[0])) {
+                    // Paint grey
+                    Paint(block[0], Grey);
+                }
+            }
+        }
+
+        printHeap();
+
+        // Loop through heap repeatedly until it has no grey cells
+        int hasGrey = 0;
+        do {
+            word* block;
+
+            for (int i = 0; i < HEAPSIZE; i += 1 + Length(block[0]))
+            {
+                block = (word*) &heap[i];
+
+                // Find white blocks
+                if (IsGrey(block[0]))
+                {
+			    	// Paint black
+                    Paint(block[0], Black);
+
+                    // Recursively mark all references
+                    for (int i = 1; i <= Length(block[0]); ++i)
+                    {
+                        if (IsReference(block[i])) {
+                            word* referencedWord = (word*) block[i];
+                            if (IsWhite(referencedWord[0])) {
+                                Paint(referencedWord[0], Grey);
+            			    	
+                                // We need to 
+                                hasGrey = 1;
+                            }
+                        }
+                    }
 			    }
 		    }
-		} while (foundGrey);
+		} while (hasGrey--);
 	}
 }
 
 void sweepPhase()
 {
-    printf("sweeping...\n");
+    //printf("sweeping...\n");
 
     word* block;
     
@@ -568,11 +626,11 @@ void sweepPhase()
     	block = (word*) &heap[i];
 
     	// Paint black blocks white again
-    	if (isBlack(block[0])) {
+    	if (IsBlack(block[0])) {
     		Paint(block[0], White);
     	}
     	// Put white blocks on the freelist
-    	else if (isWhite(block[0])) {
+    	else if (IsWhite(block[0])) {
     		// Paint blue
     		Paint(block[0], Blue);
 
@@ -583,7 +641,7 @@ void sweepPhase()
     			int offset = Length(block[0]) + 1;
 
 	    		// Is there a next block and is it white?
-    			if (i + offset < HEAPSIZE && isWhite(block[offset])) {
+    			if (i + offset < HEAPSIZE && IsWhite(block[offset])) {
 					int new_length = offset + Length(block[offset]);
 
     				// Create new header for block
@@ -594,24 +652,29 @@ void sweepPhase()
 	    	// Exercise 10.4
 	    	else if (Exercise == Exercise_10_4)
     		{
-    			int tryAgain;
+    			int tryAgain = 0;
     			do {
-    				tryAgain = 0;
 	    			int offset = Length(block[0]) + 1;
 
 		    		// Is there a next block and is it white?
-	    			if (i + offset < HEAPSIZE && isWhite(block[offset])) {
-						int new_length = offset + Length(block[offset]);
+	    			if (i + offset < HEAPSIZE) {
+                        // Check for white and orphan cells as they can't already be in the freelist
+                        if (IsWhite(block[offset]) || (IsOrphan(block[offset]))) {
+    						int new_length = offset + Length(block[offset]);
 
-	    				// Create new header for block
-	    				block[0] = mkheader(CONSTAG, new_length, Blue);
-	    				tryAgain = 1;
+    	    				// Create new header for block
+    	    				block[0] = mkheader(CONSTAG, new_length, Blue);
+                            // Clear old con header
+                            block[offset] = 0;
+
+    	    				tryAgain = 1;
+                        }
 		    		}
-		    	} while (tryAgain);
+		    	} while (tryAgain--);
 	    	}
 
     		// Don't add orphans to freelist as they can't point to the next element
-    		if (!isOrphan(block[0])) {
+    		if (!IsOrphan(block[0])) {
     			// Point second element to next free element
     			block[1] = (word) freelist;
     			freelist = (word*) &block[0];
@@ -622,12 +685,16 @@ void sweepPhase()
 
 void collect(int s[], int sp)
 {
-	printf("\nGarbage collecting\n");
+	//printf("Garbage collecting ");
+    //printHeap();
 
     markPhase(s, sp);
+    printHeap();
     //heapStatistics();
     sweepPhase();
     //heapStatistics();
+
+    printHeap();
 }
 
 word* allocate(unsigned int tag, unsigned int length, int s[], int sp)
