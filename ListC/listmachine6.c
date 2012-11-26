@@ -520,6 +520,7 @@ word* copy(word* block)
                 toBlock[i] = (int) copy((word*) block[i]);
             }
 
+            // TODO: Is this really the right thing to do?
             // As soon as we have checked the reference, we overwrite it to point to the new toBlock
             if (i == 1) {
                 // First word in the block is set to the new toBlock
