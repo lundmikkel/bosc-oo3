@@ -517,9 +517,11 @@ void initheap()
 {
     heap = (word*) malloc(sizeof(word) * HEAPSIZE);
     afterHeap = &heap[HEAPSIZE];
+
     // Initially, entire heap is one block on the freelist:
     heap[0] = mkheader(0, HEAPSIZE - 1, Blue);
     heap[1] = (word)0;
+
     freelist = &heap[0];
 }
 
@@ -600,7 +602,7 @@ void markPhase(int s[], int sp)
                             if (IsWhite(referencedWord[0])) {
                                 Paint(referencedWord[0], Grey);
             			    	
-                                // We need to 
+                                // We need to go through the heap again as new blocks have been painted grey
                                 hasGrey = 1;
                             }
                         }
