@@ -51,21 +51,19 @@
    created when allocating all but the last word of a free block.
 */
 
-#define Exercise_10_2   1
-#define Exercise_10_3   2
-#define Exercise_10_4   3
-#define Exercise_10_5   4
-#define Exercise_10_5b  5
-
-// Change to constants above to switch between exercises
-int Exercise = Exercise_10_3;
-
-
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <sys/time.h>
 #include <sys/resource.h>
+
+#define Exercise_2          2
+#define Exercise_3          3
+#define Exercise_4          4
+#define Exercise_5          5
+
+// Change to constants above to switch between exercises
+int Exercise = Exercise_2;
 
 typedef unsigned int word;
 
@@ -73,22 +71,22 @@ typedef unsigned int word;
 #define Tag(v)  			(((v) << 1) | 1)
 #define Untag(v)			( (v) >> 1)
 
-#define IsReference(w)		!IsInt(w) && w != 0
+#define IsReference(w)		w != 0 && !IsInt(w)               // Check for references - not null and not integer
 
-#define White 0				// block is dead, not reachable from the stack (after mark, before sweep)
-#define Grey  1             // block is live, children not marked (during mark)
-#define Black 2             // block is live, reachable from the stack (after mark, before sweep)
-#define Blue  3             // block is on the freelist or orphaned
+#define White 0                                               // block is dead, not reachable from the stack (after mark, before sweep)
+#define Grey  1                                               // block is live, children not marked (during mark)
+#define Black 2                                               // block is live, reachable from the stack (after mark, before sweep)
+#define Blue  3                                               // block is on the freelist or orphaned
 
 #define IsWhite(hdr)		Color(hdr) == White
 #define IsGrey(hdr) 		Color(hdr) == Grey
 #define IsBlack(hdr)		Color(hdr) == Black
 #define IsBlue(hdr) 		Color(hdr) == Blue
 
-#define BlockTag(hdr)		((hdr)>>24)						// Shift 24 bits to get tttttttt
-#define Length(hdr)			(((hdr)>>2)&0x003FFFFF)			// Shift 2 bits to remove garbage and use logical and to get the 22 next bits (all the n's)
-#define Color(hdr)			((hdr)&3)						// Logical and with 3 (11) to get the first two bits
-#define Paint(hdr, color)   hdr = (((hdr)&(~3))|(color))	// Logical and of negative 3 (00) to remove color and the use logical or to set the color
+#define BlockTag(hdr)		( (hdr)>>24)					  // Shift 24 bits to get tttttttt
+#define Length(hdr)			(((hdr)>> 2) & 0x003FFFFF)        // Shift 2 bits to remove garbage and use logical and to get the 22 next bits (all the n's)
+#define Color(hdr)			( (hdr) & 3)					  // Logical and with 3 (11) to get the first two bits
+#define Paint(hdr, color)   hdr = (((hdr) &(~3)) | (color))	  // Logical and of negation of 3 (00) to remove color and the use logical or to set the color
 
 #define IsOrphan(w)		   Length(w) <= 0
 
@@ -432,9 +430,9 @@ int execcode(int p[], int s[], int iargs[], int iargc, int /* boolean */ trace)
 int execute(int argc, char** argv, int /* boolean */ trace)
 {
     int* p = readfile(argv[trace ? 2 : 1]);         // program bytecodes: int[]
-    int* s = (int*)malloc(sizeof(int) * STACKSIZE); // stack: int[]
+    int* s = (int*) malloc(sizeof(int) * STACKSIZE); // stack: int[]
     int iargc = trace ? argc - 3 : argc - 2;
-    int* iargs = (int*)malloc(sizeof(int) * iargc); // program inputs: int[]
+    int* iargs = (int*) malloc(sizeof(int) * iargc); // program inputs: int[]
     int i;
     for (i = 0; i < iargc; i++)                     // Convert commandline arguments
         iargs[i] = atoi(argv[trace ? i + 3 : i + 2]);
@@ -547,7 +545,7 @@ void markPhase(int s[], int sp)
 	//printf("marking ...\n");
 
     // Exercise 10.2
-	if (Exercise < Exercise_10_5)
+	if (Exercise < Exercise_5)
 	{
 	    // Loop through stack
 	    for (int i = 0; i <= sp; ++i)
@@ -599,6 +597,7 @@ void markPhase(int s[], int sp)
                     {
                         if (IsReference(block[i])) {
                             word* referencedWord = (word*) block[i];
+                            
                             if (IsWhite(referencedWord[0])) {
                                 Paint(referencedWord[0], Grey);
             			    	
@@ -622,8 +621,6 @@ void sweepPhase()
     // Loop through all elements on the heap
     for (int i = 0; i < HEAPSIZE; i += 1 + Length(block[0]))
     {
-    	// TODO: Check if BlockTag is 0, else go to next element?
-
     	// Get element from heap
     	block = (word*) &heap[i];
 
@@ -638,21 +635,26 @@ void sweepPhase()
 
 
     		// Exercise 10.3
-    		if (Exercise == Exercise_10_3)
+    		if (Exercise == Exercise_3)
     		{
     			int offset = Length(block[0]) + 1;
 
 	    		// Is there a next block and is it white?
-    			if (i + offset < HEAPSIZE && IsWhite(block[offset])) {
-					int new_length = offset + Length(block[offset]);
+    			if (i + offset < HEAPSIZE) {
+                    // Check for white and orphan cells as they can't already be in the freelist
+                    if (IsWhite(block[offset]) || (IsOrphan(block[offset]))) {
+    					int new_length = offset + Length(block[offset]);
 
-    				// Create new header for block
-    				block[0] = mkheader(CONSTAG, new_length, Blue);
+        				// Create new header for block
+        				block[0] = mkheader(CONSTAG, new_length, Blue);
+                        // Clear old con header
+                        block[offset] = 0;
+                    }
 	    		}
 	    	}
 
 	    	// Exercise 10.4
-	    	else if (Exercise == Exercise_10_4)
+	    	else if (Exercise == Exercise_4)
     		{
     			int tryAgain = 0;
     			do {

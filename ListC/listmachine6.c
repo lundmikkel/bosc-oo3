@@ -72,7 +72,7 @@ typedef unsigned int word;
 
 // Heap size in words
 
-#define HEAPSIZE 12
+#define HEAPSIZE 1000
 
 word* freelist;
 
@@ -452,42 +452,9 @@ void printHeap() {
 }
 
 // 10.6
-int inHeapTo2(word* header) {
-    printHeap();
-
-    printf("inHeapTo: %d\n", (int) header);
-    word* w;
-
-    for (int i = 0; i < HEAPSIZE; i += 1 + Length(w[0]))
-    {
-        w = (word *) &heapFrom[i];
-        printf("Comparing to: %d\n", w[0]);
-        if (header  == &w[0]) {
-            // Header is in heapTo
-            return 1;
-        }
-    }
-
-    // Header is not in heapTo
-    return 0;
-}
-
-// 10.6
-int inHeapTo(word* header) {
-    word* w;
-
-    for (int i = 0; i < HEAPSIZE; i += 1 + Length(w[0]))
-    {
-        w = (word*) &heapTo[i];
-
-        // Header is not in heapTo
-        if (&w[0] == header) {
-            return 1;
-        }
-    }
-
-    // Header is not in heapTo
-    return 0;
+int inHeapTo(word* reference) {
+    // Check if the reference is in the heapTo address space
+    return &heapTo[0] <= reference && reference < &heapTo[HEAPSIZE];
 }
 
 word* copy(word* block)
@@ -511,20 +478,14 @@ word* copy(word* block)
         for (int i = 0; i <= Length(block[0]); ++i) {
             toBlock[i] = block[i];
         }
+        
+        block[1] = (word) toBlock;
 
-        //printf("Checking for references in car and cdr\n");
         // Recursively copy all references
         for (int i = 1; i <= Length(block[0]); ++i)
         {
-            if (IsReference(block[i])) {
-                toBlock[i] = (int) copy((word*) block[i]);
-            }
-
-            // TODO: Is this really the right thing to do?
-            // As soon as we have checked the reference, we overwrite it to point to the new toBlock
-            if (i == 1) {
-                // First word in the block is set to the new toBlock
-                block[1] = (word) toBlock;
+            if (IsReference(toBlock[i]) ) {
+                toBlock[i] = (int) copy((word*) toBlock[i]);
             }
         }
 
@@ -533,12 +494,6 @@ word* copy(word* block)
         // Return address of toBlock
         return toBlock;
     }
-}
-
-void swap(word* x, word* y) {
-    word* t = x;
-    x = y;
-    y = t;
 }
 
 // 10.6
@@ -591,8 +546,9 @@ word* allocate(unsigned int tag, unsigned int length, int s[], int sp)
         }
         
         // No free space, do a garbage collection and try again
-        if (attempt==1)
+        if (attempt == 1) {
             collect(s, sp);
+        }
     } while (attempt++ == 1);
 
     printf("Out of memory\n");
